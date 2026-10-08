@@ -18,14 +18,16 @@ const otpSchema = z.object({
   otp: z.string().min(6, { message: "OTP must be at least 6 characters long" }),
 });
 
-// Step 3 Schema: Passwords (Old password is not needed for forgot password flow)
-const passwordSchema = z.object({
-  newPassword: z.string().min(8, { message: "New password must be at least 8 characters long" }),
-  confirmPassword: z.string().min(8, { message: "Confirm password must be at least 8 characters long" }),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "New passwords do not match",
-  path: ["confirmPassword"],
-});
+// Step 3 Schema: Passwords
+const passwordSchema = z
+  .object({
+    newPassword: z.string().min(8, { message: "New password must be at least 8 characters long" }),
+    confirmPassword: z.string().min(8, { message: "Confirm password must be at least 8 characters long" }),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "New passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 export default function ResetPasswordPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -40,7 +42,7 @@ export default function ResetPasswordPage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const router = useRouter();
@@ -85,7 +87,6 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setErrors({});
 
-    // ১. Zod দিয়ে ক্লায়েন্ট-সাইড OTP ফরম্যাট চেক করা
     const result = otpSchema.safeParse({ otp });
     if (!result.success) {
       const msg = result.error.format().otp?._errors[0] || "Invalid OTP";
@@ -97,7 +98,6 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      // ২. সার্ভারে OTP সঠিক এবং মেয়াদের মধ্যে আছে কিনা ভেরিফাই করা
       const { data, error } = await authClient.emailOtp.checkVerificationOtp({
         email: email,
         type: "forget-password",
@@ -114,10 +114,10 @@ export default function ResetPasswordPage() {
 
       if (data) {
         setLoading(false);
-        setStep(3); // OTP ভেরিফাইড হলে স্টেপ ৩-এ (Password Reset) নিয়ে যাবে
+        setStep(3);
         toast.success("OTP verified! Now enter your new password.");
       }
-    } catch (err: any) {
+    } catch {
       setLoading(false);
       toast.error("Failed to verify OTP. Please try again.");
     }
@@ -133,7 +133,7 @@ export default function ResetPasswordPage() {
     const result = passwordSchema.safeParse({ newPassword, confirmPassword });
     if (!result.success) {
       const formatted = result.error.format();
-      const fieldErrors: { [key: string]: string } = {};
+      const fieldErrors: Record<string, string> = {};
 
       if (formatted.newPassword?._errors[0]) fieldErrors.newPassword = formatted.newPassword._errors[0];
       if (formatted.confirmPassword?._errors[0]) fieldErrors.confirmPassword = formatted.confirmPassword._errors[0];
@@ -146,7 +146,11 @@ export default function ResetPasswordPage() {
     setLoading(true);
 
     await authClient.emailOtp.resetPassword(
-      { email, otp, password: newPassword },
+      {
+        email,
+        otp,
+        password: newPassword,
+      },
       {
         onSuccess: () => {
           setLoading(false);
@@ -160,6 +164,14 @@ export default function ResetPasswordPage() {
         },
       }
     );
+  };
+
+  const clearFieldError = (fieldName: string) => {
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[fieldName];
+      return newErrors;
+    });
   };
 
   return (
@@ -204,7 +216,7 @@ export default function ResetPasswordPage() {
                       value={email}
                       onChange={(e) => {
                         setEmail(e.target.value);
-                        if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+                        if (errors.email) clearFieldError("email");
                       }}
                       className={`w-full rounded-xl border ${
                         errors.email
@@ -252,7 +264,7 @@ export default function ResetPasswordPage() {
                       value={otp}
                       onChange={(e) => {
                         setOtp(e.target.value);
-                        if (errors.otp) setErrors((prev) => ({ ...prev, otp: undefined }));
+                        if (errors.otp) clearFieldError("otp");
                       }}
                       className={`w-full rounded-xl border ${
                         errors.otp
@@ -292,7 +304,7 @@ export default function ResetPasswordPage() {
                       value={newPassword}
                       onChange={(e) => {
                         setNewPassword(e.target.value);
-                        if (errors.newPassword) setErrors((prev) => ({ ...prev, newPassword: undefined }));
+                        if (errors.newPassword) clearFieldError("newPassword");
                       }}
                       className={`w-full rounded-xl border ${
                         errors.newPassword
@@ -326,7 +338,7 @@ export default function ResetPasswordPage() {
                       value={confirmPassword}
                       onChange={(e) => {
                         setConfirmPassword(e.target.value);
-                        if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+                        if (errors.confirmPassword) clearFieldError("confirmPassword");
                       }}
                       className={`w-full rounded-xl border ${
                         errors.confirmPassword
